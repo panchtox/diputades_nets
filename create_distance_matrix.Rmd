@@ -1,0 +1,112 @@
+---
+title: ""
+author: "Francisco"
+date: "`r format(Sys.time(), '%d %B, %Y %H:%M')`"
+output: 
+  html_document: 
+    fig_width: 10
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = F,warning = F)
+```
+
+```{r includes}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load("dplyr","stringr","pbapply","ggplot2")
+```
+
+```{r}
+diputados_idps <- read.csv("idps_2019_sinnormalizar.csv",stringsAsFactors = F)
+periodos <- diputados_idps %>% distinct(periodo) %>% first()
+```
+
+```{r}
+matrices_distancia <- pblapply(periodos,function(x){
+  idps_periodo <- diputados_idps[diputados_idps$periodo == x,]
+  ndf <- nrow(idps_periodo)^2
+  df <- data.frame(desde = character(ndf), hacia = character(ndf),idps_dist = numeric(ndf), stringsAsFactors = FALSE)
+  c <- 1
+  for (i in 1:nrow(idps_periodo)) {
+    for (j in 1:nrow(idps_periodo)) {
+      # print(paste(idps_periodo[i,]$nombre,"|",idps_periodo[j,]$nombre))
+      df$desde[c] <- idps_periodo[i,]$nombre
+      df$hacia[c] <- idps_periodo[j,]$nombre
+      df$idps_dist[c] <- abs(idps_periodo[i,]$idp-idps_periodo[j,]$idp)
+      c <- c+1
+    }
+  }
+  idps_distancias <- cbind(df,periodo=x)
+})
+```
+```{r}
+distancias_periodos_todos <- bind_rows(matrices_distancia) %>% filter(idps_dist>0)
+```
+
+```{r}
+# Cada nombre de legislador esta representado por un unico legislador_id?
+# sesiones_completas %>% distinct(legislador,legislador_id) %>% group_by(legislador) %>% summarise(n=n()) %>% filter(n>1)
+# Este resultado indica que SI
+
+# En cada periodo, el mismo legislador esta mapeado a un unico bloque?
+sesiones_completas %>% distinct(periodo,legislador,bloque) %>% group_by(periodo,legislador) %>% summarise(n=n()) %>% filter(n>1) %>% ungroup() %>% inner_join(sesiones_completas) %>% distinct(legislador,periodo,bloque,bloque_id) %>% arrange(legislador,periodo,bloque) %>% View()
+# La respuesta es NO, y ademas, cada nombre de bloque por minima diferencia en denominacion, tiene su propio ID, por lo tanto, al re mapearlos luego de reducir a la lista de IDPs, usare el criterio de elegir el bloque dentro del cual hayan realizado la mayor cantidad de votaciones en ese periodo. En caso de empate, elegire el ultimo
+```
+
+
+
+```{r}
+write.table(distancias_periodos_todos,"distancias_periodos_todos.csv",row.names = F,sep = ";",quote = F)
+
+distancias_periodos_todos %>% filter(periodo==2010) %>% 
+write.table("distancias_periodo_2010.csv",row.names = F,sep = ";",quote = F)
+
+distancias_periodos_todos %>% filter(periodo==2010) %>% 
+  ggplot(aes(idps_dist)) +
+  geom_histogram(binwidth = 5)
+
+distancias_periodos_todos %>% filter(periodo==2010,idps_dist<50) %>%
+write.table("distancias_periodo_2010_sub50.csv",row.names = F,sep = ";",quote = F)
+
+distancias_periodos_todos %>% filter(periodo==2010,idps_dist<20) %>%
+write.table("distancias_periodo_2010_sub20.csv",row.names = F,sep = ";",quote = F)
+
+distancias_periodos_todos %>% filter(periodo==2010,str_detect(tolower(desde),"kirchner")) %>% View()
+```
+
+```{r bloques}
+# Voy a definir como bloque para cada anio, el ultimo del periodo, teniendo en cuenta que el orden depende del voting_id
+legislador_bloque_periodo <- sesiones_completas %>%
+     group_by(legislador,periodo) %>%
+     dplyr::mutate(
+         first = dplyr::first(bloque),
+         last = dplyr::last(bloque)
+     ) %>% 
+  arrange(legislador,periodo) %>% 
+  ungroup() %>% 
+  distinct(legislador_id,legislador,periodo,last) %>% 
+  rename(bloque=last)
+
+bloques <- sesiones_completas %>% 
+  distinct(bloque,bloque_id)
+
+legislador_bloque_periodo <- legislador_bloque_periodo %>% inner_join(bloques)
+
+```
+
+```{r exportar bloques}
+# Esto hay que importarlo y meterlo todo como vertices para cada periodo (reemplazaria el vector "diputades") y ponerle el resto de las variables como atributos de los vertices
+write.table(legislador_bloque_periodo,"legislador_bloque_periodo.csv",row.names = F,sep = ";",quote = F)
+```
+
+```{r Nestor}
+# Explorar si la muerte de Nestor Kirchner sesga su idp por ausencia
+sesiones_completas %>% filter(periodo==2010,
+                              str_detect(tolower(legislador),"kirchner")|
+                                str_detect(tolower(legislador),"alvarez, juan josé")) %>% 
+  group_by(voting_id,legislador,voto) %>% summarise(n()) %>% 
+  spread(voting_id,voto) %>% 
+  View()
+# Pareciera que las ausencias luego de la muerte las pone como NA
+```
+

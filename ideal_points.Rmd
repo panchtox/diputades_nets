@@ -1,0 +1,104 @@
+---
+title: ""
+author: "Francisco"
+date: "`r format(Sys.time(), '%d %B, %Y %H:%M')`"
+output: 
+  html_document: 
+    fig_width: 10
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = F,warninsg = F)
+```
+
+```{r includes}
+# Import needed libraries
+if (!require("pacman")) install.packages("pacman") # packages loading manager
+# dplyr: General data management; pscl: specific for ideal points calculation; stringr: string manipulation; pbapply: kinda progress bars; ggplot2: graphic library
+pacman::p_load("dplyr","pscl","stringr","pbapply","ggplot2")
+```
+
+```{r initialize}
+# Establecer el path del repositorio y listar los archivos csv con los votos
+path <- "./csv/"
+files <- bind_rows(as_data_frame(list.files(pattern = "votaciones_votos-.*.csv$",path = path)))
+```
+
+```{r import data}
+# Generar una lista con cada elemento correspondiendo a un periodo de votacion
+sesiones_completas <- lapply(files$value,function(x){
+  yr <- as.integer(str_extract(x,"\\d{4}")) # Extrae el anio de votacion
+  yr_votes <- read.csv(paste0(path,x),sep = ",",stringsAsFactors = F) # Importa el archivo
+  yr_votes <-  cbind(yr_votes,periodo=yr) # Le agrega la columna con el periodo de votacion
+  yr_votes
+})
+# Transformar la lista en un dataset unico
+sesiones_completas <- bind_rows(sesiones_completas) # Unir los periodos
+# Listar los periodos
+periodos <- sesiones_completas %>% distinct(periodo) %>% first()
+```
+
+```{r}
+# Reordenar
+sesiones_completas <- sesiones_completas %>% arrange(voto,periodo,legislador_id,voting_id,bloque_id)
+# Calcular los puntos ideales para cada periodo
+# La funcion a continuacion, creara una variable de tipo lista.
+# Cada elemento contendra los nombres de cada legislador con su punto ideal, para un periodo determinado
+# Todo esto es devuelto por cada iteracion de la funcion en la variable outcome
+info <- pblapply(periodos,function(x){
+  votos_periodo <- sesiones_completas[sesiones_completas$periodo == x,] # Extrae los votos de 1 periodo
+  # Para usar luego en la funcion "rollcall" hay que extraer una serie de valores
+  nvotos_periodo <- dim(votos_periodo)[1] # Cantidad de votos del periodo
+  legis.names <- as.vector(unique(votos_periodo[,'legislador'])) # Nombres de los legisladores
+  nlegis <- length(legis.names) # Cantidad de legisladores
+  legis.partidos <- as.vector(votos_periodo[rownames(unique(votos_periodo['legislador'])),
+                                            'bloque']) # Bloques de los legisladores
+  actas.names <- as.vector(as.character(unique(votos_periodo[,'voting_id']))) # Ids de las actas votadas
+  nactas <- length(actas.names) # Cantidad de actas votadas
+  niveles <- unique(votos_periodo[,'voto']) # Variantes de voto ("AFIRMATIVO", "NEGATIVO", etc.)
+  niveles <- sort(niveles)
+  # Genero variables numericas que corresponden al tipo de voto (nivel)
+  notInLegis <- match('AUSENTE', niveles)
+  yea <- match('AFIRMATIVO', niveles)
+  nay <- match('NEGATIVO', niveles)
+  abstencion <- match('ABSTENCION', niveles)
+  # Genero matriz vacia con dimension nlegis x nactas
+  data <- matrix(, nlegis, nactas)
+  # Matriz con votos por legislador y acta con valores numericos de acuerdo al 'nivel'
+  for (n in 1:nvotos_periodo) {
+    nombre <- legis.names == votos_periodo[n, 'legislador']
+    acta <- actas.names == votos_periodo[n, 'voting_id']
+    nivel <- match(votos_periodo[n, 'voto'], niveles)
+    data[nombre, acta] <- nivel
+  }
+  legis.data <- data.frame(party=legis.partidos) # Convierto la tabla con partidos x legislador en formato dataframe de R
+  row.names(legis.data) <- legis.names # Asigno los nombres de los legisladores como etiquetas de fila
+  desc <- paste('Votos de diputados', x) # Etiqueta descriptiva para el periodo
+  # La funcion a continuacion, es especifica de pscl y es esencial para el calculo
+  # Se utilizan todos los valores que fueron calculados previamente
+  rData <- rollcall(data, yea=yea, nay=nay, missing=abstencion,
+                            notInLegis=notInLegis, legis.names=legis.names, vote.names=actas.names,
+                            legis.data=legis.data, vote.data=NULL, desc=desc, source=NULL)
+
+  # El algoritmo de ideal points en si, en este caso, con valores normalizados
+  fitted <- ideal(rData, normalize=T,impute = T)
+  outcome <- fitted$xbar # Extraigo el vector de puntos ideales
+  outcome <- cbind(outcome,periodo=votos_periodo$periodo[1]) # Le pego la columna que indica el periodo
+  outcome <- as.data.frame(outcome) # Lo transformo al formato dataframe de R
+  names(outcome) <- c("idp","periodo") # Agrego nombres de columna
+  outcome <- add_rownames(outcome,"nombre") # Extraigo las etiquetas de fila y las transformo en nueva columna con el nombre de cada legislador
+})
+
+idps_periodos_todos <- bind_rows(info) # Fusiono todos los periodos en una sola tabla
+```
+
+```{r export}
+# Exportar el resultado a un csv
+write.table(idps_periodos_todos,"idps_normalizados.csv",row.names = F,sep = ",")
+```
+
+```{r delete garbage}
+# Borrar objetos innecesarios
+rm(list=setdiff(ls(), "idps_periodos_todos"))
+```
+
