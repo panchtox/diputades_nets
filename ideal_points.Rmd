@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = FALSE,message = F,warninsg = F)
 # Import needed libraries
 if (!require("pacman")) install.packages("pacman") # packages loading manager
 # dplyr: General data management; pscl: specific for ideal points calculation; stringr: string manipulation; pbapply: kinda progress bars; ggplot2: graphic library
-pacman::p_load("dplyr","pscl","stringr","pbapply","ggplot2")
+pacman::p_load("dplyr","pscl","stringr","pbapply")
 ```
 
 ```{r initialize}
@@ -45,6 +45,7 @@ sesiones_completas <- sesiones_completas %>% arrange(voto,periodo,legislador_id,
 # La funcion a continuacion, creara una variable de tipo lista.
 # Cada elemento contendra los nombres de cada legislador con su punto ideal, para un periodo determinado
 # Todo esto es devuelto por cada iteracion de la funcion en la variable outcome
+## Es bastante rapido, a mi me tardo entre 7 y 10 minutos las veces que lo corri
 info <- pblapply(periodos,function(x){
   votos_periodo <- sesiones_completas[sesiones_completas$periodo == x,] # Extrae los votos de 1 periodo
   # Para usar luego en la funcion "rollcall" hay que extraer una serie de valores
@@ -99,6 +100,6 @@ write.table(idps_periodos_todos,"idps_normalizados.csv",row.names = F,sep = ",")
 
 ```{r delete garbage}
 # Borrar objetos innecesarios
-rm(list=setdiff(ls(), "idps_periodos_todos"))
+rm(list=setdiff(ls(), c("idps_periodos_todos","sesiones_completas")))
 ```
 
