@@ -66,8 +66,8 @@ lapply(grafos_por_periodo,function(g){
 	  archivo_subgrafo <- paste0("subgrafo_",periodo,"_",i,".html")
 	  archivo_csv <- paste0("lista_",periodo,"_",i,".csv")
 	  gs <- as.undirected(subgraph(g, which(x$membership==i)))
-	  saveWidget(graphjs(gs), file = paste0(getwd(),"/",path,archivo_subgrafo))
-	  write.table(V(gs)$label,paste0(getwd(),"/",path,archivo_csv),row.names = F,sep = ",")
+	  saveWidget(graphjs(gs), file = paste0(getwd(),"/",path,"/",archivo_subgrafo))
+	  write.table(V(gs)$label,paste0(getwd(),"/",path,"/",archivo_csv),row.names = F,sep = ",")
 	})
   lapply(1:2,function(i){
     archivo_grafo <- paste0("grafo_",i,".html")
