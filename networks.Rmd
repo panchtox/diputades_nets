@@ -69,21 +69,25 @@ lapply(grafos_por_periodo,function(g){
   periodo <- V(g)$periodo[1]
   path <- paste0("grafos_",periodo)
   dir.create(path)
-  g <- delete.vertices(g,V(g)[degree(g)<3])
-  x <- fastgreedy.community(g, weights = (1/E(g)$weight))
+  g <- delete.vertices(g,V(g)[degree(g)<3]) # Para que no queden nodos perdidos en el espacio
+  x <- fastgreedy.community(g, weights = (1/E(g)$weight)) # Detectar comunidades
   i <- membership(x)
-  g <- set.vertex.attribute(g,"color",value = rainbow(length(x))[i])
-  lapply(1:length(x),function(i){
+  g <- set.vertex.attribute(g,"color",value = rainbow(length(x))[i]) # Mapea las comunidades a colores
+  lapply(1:length(x),function(i){ # Iterador para guardar los subgrafos y csv de las comunidades
 	  archivo_subgrafo <- paste0("subgrafo_",periodo,"_",i,".html")
 	  archivo_csv <- paste0("lista_",periodo,"_",i,".csv")
 	  gs <- as.undirected(subgraph(g, which(x$membership==i)))
 	  saveWidget(graphjs(gs), file = paste0(getwd(),"/",path,"/",archivo_subgrafo))
 	  write.table(V(gs)$label,paste0(getwd(),"/",path,"/",archivo_csv),row.names = F,sep = ",")
 	})
-  lapply(1:2,function(i){
+  # La visualizacion de un grafo es muy dependiente del layout. Para encontrar una buena proyeccion
+  # Genero k grafos, cada uno con un layout distinto para luego elegir.
+  k <- 2
+  lapply(1:k,function(i){ # Iterador para generar grafos con diferente layout
     archivo_grafo <- paste0("grafo_",i,".html")
     filepath <- paste0(getwd(),"/",path,"/",archivo_grafo)
-    l <- layout_with_fr(g,dim = 3)
+    l <- layout_with_fr(g,dim = 3) # Calcula un layout
+    # Guarda el grafo generado por graphjs
     saveWidget(graphjs(g,layout = l,vertex.size = (V(g)$betweenness+1)),file =filepath)
   })
 })
