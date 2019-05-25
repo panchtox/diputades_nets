@@ -1,0 +1,82 @@
+---
+title: ""
+author: "Francisco"
+date: "`r format(Sys.time(), '%d %B, %Y %H:%M')`"
+output: 
+  html_document: 
+    fig_width: 10
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = F,warning = F)
+```
+
+```{r includes}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load("dplyr","igraph","threejs","tidyr","htmlwidgets")
+```
+
+```{r}
+distancias_periodos_todos <- distancias_periodos_todos %>% 
+  rename(Source=desde,Target=hacia,weight=idps_dist,period=periodo)
+```
+
+```{r}
+legisladores <- distancias_periodos_todos %>% gather(variable,legislador,-c(weight,period)) %>%
+  distinct(legislador) %>% 
+  inner_join(legislador_bloque_periodo)
+```
+
+
+```{r}
+grafos_por_periodo <- pblapply(periodos,function(x){
+  # Extraer las distancias para un periodo determinado
+  distancias_periodo <- distancias_periodos_todos[distancias_periodos_todos$period == x,]
+  diputades_periodo <- legisladores[legisladores$periodo == x,]
+  punto_corte <- 0.7
+  g <- graph_from_data_frame(vertices = diputades_periodo$legislador,
+                             d = distancias_periodo[,c(1:3)],directed = F)
+  V(g)$legislador_id <- diputades_periodo$legislador_id
+  V(g)$bloque <- diputades_periodo$bloque
+  V(g)$bloque_id <- diputades_periodo$bloque_id
+  V(g)$periodo <- diputades_periodo$periodo
+  V(g)$betweenness <- betweenness(g,directed = F,normalized = T)
+  g <- set.vertex.attribute(g,"label",
+                                value = paste0("<b>",V(g)$name,"</b>","<br>",V(g)$bloque))
+  
+  gsimp <- simplify(g)
+  
+  gsimp <- delete_edges(g, E(g)[weight > punto_corte])
+  gsimp <- simplify(gsimp)
+  
+})
+```
+
+
+```{r}
+lapply(grafos_por_periodo,function(g){
+  periodo <- V(g)$periodo[1]
+  path <- paste0("grafos_",periodo)
+  dir.create(path)
+  g <- delete.vertices(g,V(g)[degree(g)<3])
+  x <- fastgreedy.community(g, weights = (1/E(g)$weight))
+  i <- membership(x)
+  g <- set.vertex.attribute(g,"color",value = rainbow(length(x))[i])
+  lapply(1:length(x),function(i){
+	  archivo_subgrafo <- paste0("subgrafo_",periodo,"_",i,".html")
+	  archivo_csv <- paste0("lista_",periodo,"_",i,".csv")
+	  gs <- as.undirected(subgraph(g, which(x$membership==i)))
+	  saveWidget(graphjs(gs), file = paste0(getwd(),"/",path,archivo_subgrafo))
+	  write.table(V(gs)$label,paste0(getwd(),"/",path,archivo_csv),row.names = F,sep = ",")
+	})
+  lapply(1:2,function(i){
+    archivo_grafo <- paste0("grafo_",i,".html")
+    filepath <- paste0(getwd(),"/",path,"/",archivo_grafo)
+    l <- layout_with_fr(g,dim = 3)
+    saveWidget(graphjs(g,layout = l,vertex.size = (V(g)$betweenness+1)),file =filepath)
+  })
+})
+```
+
+
+
