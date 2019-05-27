@@ -21,7 +21,7 @@ pacman::p_load("dplyr","pscl","stringr","pbapply")
 ```{r initialize}
 # Establecer el path del repositorio y listar los archivos csv con los votos
 path <- "./csv/"
-files <- bind_rows(as_data_frame(list.files(pattern = "votaciones_votos-.*.csv$",path = path)))
+files <- bind_rows(dplyr::as_data_frame(list.files(pattern = "votaciones_votos-.*.csv$",path = path)))
 ```
 
 ```{r import data}

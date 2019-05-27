@@ -92,6 +92,6 @@ write.table(legislador_bloque_periodo,"legislador_bloque_periodo.csv",row.names 
 
 ```{r delete garbage}
 # Borrar objetos innecesarios
-rm(list=setdiff(ls(), c("periodos","distancias_periodos_todos","legislador_bloque_periodo")))
+rm(list=setdiff(ls(), c("periodos","distancias_periodos_todos","legislador_bloque_periodo","idps_periodos_todos")))
 ```
 

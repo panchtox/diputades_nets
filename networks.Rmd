@@ -82,6 +82,7 @@ lapply(grafos_por_periodo,function(g){
 	})
   # La visualizacion de un grafo es muy dependiente del layout. Para encontrar una buena proyeccion
   # Genero k grafos, cada uno con un layout distinto para luego elegir.
+  # Cada grafo queda guardado en una carpeta del periodo y esta numerado de acuerdo a k
   k <- 2
   lapply(1:k,function(i){ # Iterador para generar grafos con diferente layout
     archivo_grafo <- paste0("grafo_",i,".html")
